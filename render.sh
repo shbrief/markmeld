@@ -104,15 +104,24 @@ md_path = pathlib.Path(out_dir) / "research_strategy.md"
 md_path.write_bytes(md_bytes)
 print(f"    {md_path} ({len(md_bytes):,} bytes)")
 
-# Download every SVG in the fig folder
-q = f"'{fig_folder_id}' in parents and mimeType='image/svg+xml' and trashed=false"
-files = svc.files().list(q=q, pageSize=100, fields="files(id,name)").execute().get("files", [])
-fig_dir = pathlib.Path(out_dir) / "fig_svg"
+# Download every SVG and PNG in the fig folder.
+# SVGs go to fig_svg/ (later rasterized to fig/); PNGs go straight to fig/.
+q = (f"'{fig_folder_id}' in parents and trashed=false and "
+     "(mimeType='image/svg+xml' or mimeType='image/png')")
+files = svc.files().list(q=q, pageSize=100, fields="files(id,name,mimeType)").execute().get("files", [])
+svg_dir = pathlib.Path(out_dir) / "fig_svg"
+png_dir = pathlib.Path(out_dir) / "fig"
+n_svg = n_png = 0
 for f in files:
     data = download(svc.files().get_media(fileId=f["id"]))
-    (fig_dir / f["name"]).write_bytes(data)
+    dest = (svg_dir if f["mimeType"] == "image/svg+xml" else png_dir) / f["name"]
+    dest.write_bytes(data)
+    if f["mimeType"] == "image/svg+xml":
+        n_svg += 1
+    else:
+        n_png += 1
     print(f"  fetched {f['name']:<32} ({len(data):,} bytes)")
-print(f"  {len(files)} SVGs in {fig_dir}/")
+print(f"  {n_svg} SVGs in {svg_dir}/, {n_png} PNGs in {png_dir}/")
 PYEOF
 fi
 
